@@ -21,3 +21,5 @@ Edit your config.php to activate the plugin and inform you Tracking ID:
 ```
 
 Access http://yoursite.com/site/network
+
+Access the agents profiles and click on the "Rede" tab
