@@ -29,6 +29,9 @@
                 hierarchical: {
                     enabled: false
                 }
+            },
+            physics:{
+                enabled: false
             }
         };
 
