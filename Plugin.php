@@ -116,8 +116,23 @@ class Plugin extends \MapasCulturais\Plugin {
                 
             }
             
+            // agentes que me controlam
+            $controlledAgents = $app->repo('AgentAgentRelation')->findBy(['owner' => $center->id, 'hasControl' => true, 'status' => 1]);
+            
+            foreach ($controlledAgents as $a) {
+                $ag = $a->agent;
+                $plugin->addNewAgentNode($ag);
+
+                $plugin->addNewEdge('agent-' . $ag->id, 'agent-' . $center->id, 'controls');
+                
+            }
+            
+            
+            
+            // filhos e espaços
             $plugin->exploreChildren($center);
             
+            // pais
             $parent = $plugin->exploreParents($center);
             
             $this->part('networkview-content', [
