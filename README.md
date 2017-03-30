@@ -6,7 +6,7 @@ Visualização em rede para Mapas Culturais
 
 Download and place this plugin inside you plugins folder located at protected/application/plugins and rename its folder to NetworkView.
 
-Edit your config.php to activate the plugin and inform you Tracking ID: 
+Edit your config.php to activate the plugin:
 
 ```PHP
 
