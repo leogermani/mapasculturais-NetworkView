@@ -43,47 +43,29 @@ class Plugin extends \MapasCulturais\Plugin {
                         //'color' => 'blue'
                     ];
                 }
-            }
-            //\dump($spaces); die;
-            #foreach ($spaces as $space) {
-            #    $nodes[] = [
-            #        'id' => 'space-' . $space->id,
-            #        //'label' => $agent->name,
-            #        'label' => $space->id,
-            #        'shape' => 'square',
-            #        //'color' => 'blue'
-            #    ];
-            #    //\dump($space->owner->id); die;
-            #    $edges[] = [
-            #        'from' => 'agent-' . $space->owner->id,
-            #        'to' => 'space-' . $space->id,
-            #        //'color' => 'blue'
-            #    ];
-            #    
-            #    #if (is_object($agent->parent)) {
-            #    #    $edges[] = [
-            #    #        'from' => 'space-' . $space->parent->id,
-            #    #        'to' => 'space-' . $space->id,
-            #    #        //'color' => 'blue'
-            #    #    ];
-            #    #}
-            #    
-            #}
+            }            
             
-            $this->render('search-network', [
-                'edges' => $edges,
-                'nodes' => $nodes
-            ]);
+            $this->render('search-network');
         
         });
-        
-        
-        //$app->hook('template(<<agent|space>>.single.tabs):end', function() use($app){
-            $app->hook('template(<<agent>>.single.tabs):end', function() use($app){
+
+        function enqueueScriptsAndStyles() {
+            $app = App::i();            
+            
+            $app->view->enqueueStyle('app', 'vis-css', 'css/vis.min.css');
+            $app->view->enqueueStyle('app', 'network-view-css', 'css/network-view.css');
+
+            $app->view->enqueueScript('app', 'vis-js', 'js/vis.min.js', array('mapasculturais'));
+            $app->view->enqueueScript('app', 'network-view-js', 'js/network-view.js', array('mapasculturais'));            
+        }
+
+        $app->hook('template(<<agent>>.single.tabs):end', function() use($app){
             $this->part('networkview-tab');
         });
         
         $app->hook('template(<<agent>>.single.tabs-content):end', function() use($app, $plugin){
+            enqueueScriptsAndStyles();
+            $this->part('networkview-content');
 
             $center = $this->controller->requestedEntity;
             
@@ -120,13 +102,10 @@ class Plugin extends \MapasCulturais\Plugin {
             $plugin->exploreChildren($center);
             
             // pais
-            $parent = $plugin->exploreParents($center);
+            $parent = $plugin->exploreParents($center);            
             
-            $this->part('networkview-content', [
-                'edges' => $plugin->edges,
-                'nodes' => $plugin->nodes
-            ]);
-            
+            $app->view->jsObject['networkviewEdges'] = $plugin->edges;
+            $app->view->jsObject['networkviewNodes'] = $plugin->nodes;            
         });
         
         
@@ -237,9 +216,6 @@ class Plugin extends \MapasCulturais\Plugin {
         
     }
     
-
-    
-    
     function addNewAgentNode($agent) {
         
         $id = 'agent-' . $agent->id;        
@@ -256,7 +232,8 @@ class Plugin extends \MapasCulturais\Plugin {
             'shape' => 'circularImage',
             'image' => $url,
             '_type' => 'agent',
-            '_id' => $agent->id
+            '_id' => $agent->id,
+            'color' => 'rgb(29, 171, 198)'
         ];
         
     }
@@ -269,15 +246,15 @@ class Plugin extends \MapasCulturais\Plugin {
         
         $this->nodesIds[] = $id;
         $url = $space->avatar == null ? App::i()->view->asset('img/avatar--space.png',false) : $space->avatar->transform('avatarSmall')->url;
-
         $this->nodes[] = [
             'id' => $id,
             'label' => (strlen($space->name) > 13) ? substr($space->name,0,10).'...' : $space->name,
             'title' => $space->name,
-            'shape' => 'image',
+            'shape' => 'circularImage',
             'image' => $url,
             '_type' => 'space',
-            '_id' => $space->id
+            '_id' => $space->id,
+            'color' => 'rgb(232, 63, 150)'
         ];
     }
     
