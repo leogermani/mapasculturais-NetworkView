@@ -43,47 +43,29 @@ class Plugin extends \MapasCulturais\Plugin {
                         //'color' => 'blue'
                     ];
                 }
-                
-            }
-            //\dump($spaces); die;
-            #foreach ($spaces as $space) {
-            #    $nodes[] = [
-            #        'id' => 'space-' . $space->id,
-            #        //'label' => $agent->name,
-            #        'label' => $space->id,
-            #        'shape' => 'square',
-            #        //'color' => 'blue'
-            #    ];
-            #    //\dump($space->owner->id); die;
-            #    $edges[] = [
-            #        'from' => 'agent-' . $space->owner->id,
-            #        'to' => 'space-' . $space->id,
-            #        //'color' => 'blue'
-            #    ];
-            #    
-            #    #if (is_object($agent->parent)) {
-            #    #    $edges[] = [
-            #    #        'from' => 'space-' . $space->parent->id,
-            #    #        'to' => 'space-' . $space->id,
-            #    #        //'color' => 'blue'
-            #    #    ];
-            #    #}
-            #    
-            #}
+            }            
             
-            $this->render('search-network', [
-                'edges' => $edges,
-                'nodes' => $nodes
-            ]);
+            $this->render('search-network');
         
         });
-        
-        
-        $app->hook('template(<<agent|space>>.single.tabs):end', function() use($app){
+
+        function enqueueScriptsAndStyles() {
+            $app = App::i();            
+            
+            $app->view->enqueueStyle('app', 'vis-css', 'css/vis.min.css');
+            $app->view->enqueueStyle('app', 'network-view-css', 'css/network-view.css');
+
+            $app->view->enqueueScript('app', 'vis-js', 'js/vis.min.js', array('mapasculturais'));
+            $app->view->enqueueScript('app', 'network-view-js', 'js/network-view.js', array('mapasculturais'));            
+        }
+
+        $app->hook('template(<<agent>>.single.tabs):end', function() use($app){
             $this->part('networkview-tab');
         });
         
         $app->hook('template(<<agent>>.single.tabs-content):end', function() use($app, $plugin){
+            enqueueScriptsAndStyles();
+            $this->part('networkview-content');
 
             $center = $this->controller->requestedEntity;
             
@@ -93,53 +75,37 @@ class Plugin extends \MapasCulturais\Plugin {
             
             // agentes que controla
             $controlledAgents = $app->repo('AgentAgentRelation')->findBy(['agent' => $center->id, 'hasControl' => true, 'status' => 1]);
-            
             foreach ($controlledAgents as $a) {
                 $ag = $a->owner;
                 $plugin->addNewAgentNode($ag);
-
                 $plugin->addNewEdge('agent-' . $center->id, 'agent-' . $ag->id, 'controls');
-                
                 $plugin->exploreChildren($ag, false);
-
             }
             
             // espacos que controla
             $controlledSpaces = $app->repo('SpaceAgentRelation')->findBy(['agent' => $center->id, 'hasControl' => true, 'status' => 1]);
-            
             foreach ($controlledSpaces as $s) {
                 $sp = $s->owner;
-                
                 $plugin->addNewSpaceNode($sp);
-
                 $plugin->addNewEdge('agent-' . $center->id, 'space-' . $sp->id, 'controls');
-                
             }
             
             // agentes que me controlam
             $controlledAgents = $app->repo('AgentAgentRelation')->findBy(['owner' => $center->id, 'hasControl' => true, 'status' => 1]);
-            
             foreach ($controlledAgents as $a) {
                 $ag = $a->agent;
                 $plugin->addNewAgentNode($ag);
-
                 $plugin->addNewEdge('agent-' . $ag->id, 'agent-' . $center->id, 'controls');
-                
             }
-            
-            
             
             // filhos e espaços
             $plugin->exploreChildren($center);
             
             // pais
-            $parent = $plugin->exploreParents($center);
+            $parent = $plugin->exploreParents($center);            
             
-            $this->part('networkview-content', [
-                'edges' => $plugin->edges,
-                'nodes' => $plugin->nodes
-            ]);
-            
+            $app->view->jsObject['networkviewEdges'] = $plugin->edges;
+            $app->view->jsObject['networkviewNodes'] = $plugin->nodes;            
         });
         
         
@@ -149,7 +115,7 @@ class Plugin extends \MapasCulturais\Plugin {
     public function exploreChildren($entity, $exploreControlled = true) {
         $nodes = [];
         $edges = [];
-        $app = App::i();    
+        $app = App::i();
 
         $children = $entity->children;
         $spaces = $entity->spaces;
@@ -193,13 +159,12 @@ class Plugin extends \MapasCulturais\Plugin {
                     // espacos que controla
                     $controlledSpaces = $app->repo('SpaceAgentRelation')->findBy(['agent' => $c->id, 'hasControl' => true, 'status' => 1]);
                     
+                    
+                    
                     foreach ($controlledSpaces as $s) {
                         $sp = $s->owner;
-                        
                         $this->addNewSpaceNode($sp);
-
-                        $this->addNewEdge('agent-' . $center->id, 'space-' . $sp->id, 'controls');
-                
+                        $this->addNewEdge('agent-' . $c->id, 'space-' . $sp->id, 'controls');
                     }
                     
                 }
@@ -208,13 +173,13 @@ class Plugin extends \MapasCulturais\Plugin {
             
             // entity spaces
             foreach ($entity->spaces as $space) {
-                
+                //App::i()->log->debug($space);                
                 $this->addNewSpaceNode($space);
-
                 $this->addNewEdge('agent-' . $entity->id, 'space-' . $space->id);
-                
-            } 
-            
+                if ($space->parent) {                    
+                    $this->addNewEdge('space-' . $space->parent->id, 'space-' . $space->id, 'subspace');
+                }
+            }
             
         } else {
             return false;
@@ -251,44 +216,46 @@ class Plugin extends \MapasCulturais\Plugin {
         
     }
     
-    
-    
     function addNewAgentNode($agent) {
         
-        $id = 'agent-' . $agent->id;
-        
+        $id = 'agent-' . $agent->id;        
         if (in_array($id, $this->nodesIds))
             return;
         
         $this->nodesIds[] = $id;
+        $url = $agent->avatar == null ? App::i()->view->asset('img/avatar--agent.png',false) : $agent->avatar->transform('avatarSmall')->url;
         
         $this->nodes[] = [
-                    'id' => $id,
-                    //'label' => $agent->name,
-                    'label' => $agent->name,
-                    //'shape' => 'circle',
-                    //'color' => 'blue'
-                ];
+            'id' => $id,
+            'label' => (strlen($agent->name) > 13) ? substr($agent->name,0,10).'...' : $agent->name,
+            'title' => $agent->name,
+            'shape' => 'circularImage',
+            'image' => $url,
+            '_type' => 'agent',
+            '_id' => $agent->id,
+            'color' => 'rgb(29, 171, 198)'
+        ];
         
     }
     
     function addNewSpaceNode($space) {
         
         $id = 'space-' . $space->id;
-        
         if (in_array($id, $this->nodesIds))
             return;
         
         $this->nodesIds[] = $id;
-        
+        $url = $space->avatar == null ? App::i()->view->asset('img/avatar--space.png',false) : $space->avatar->transform('avatarSmall')->url;
         $this->nodes[] = [
-                    'id' => $id,
-                    //'label' => $agent->name,
-                    'label' => $space->name,
-                    'shape' => 'square',
-                    //'color' => 'blue'
-                ];
-        
+            'id' => $id,
+            'label' => (strlen($space->name) > 13) ? substr($space->name,0,10).'...' : $space->name,
+            'title' => $space->name,
+            'shape' => 'circularImage',
+            'image' => $url,
+            '_type' => 'space',
+            '_id' => $space->id,
+            'color' => 'rgb(232, 63, 150)'
+        ];
     }
     
     function addNewEdge($from, $to, $type = 'default') {
@@ -307,7 +274,10 @@ class Plugin extends \MapasCulturais\Plugin {
             ];
         
         if ($type == 'controls') 
-            $config['color'] = 'red';
+            $config['color'] = '#e74c3c';
+
+        if ($type == 'subspace')
+            $config['dashes'] = true;        
         
         $this->edges[] = $config;
     
